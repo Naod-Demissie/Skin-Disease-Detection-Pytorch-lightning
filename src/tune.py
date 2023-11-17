@@ -1,16 +1,4 @@
-# src: https://github.com/optuna/optuna-examples/blob/main/pytorch/pytorch_lightning_simple.py
-"""
-Optuna example that optimizes multi-layer perceptrons using PyTorch Lightning.
 
-In this example, we optimize the validation accuracy of fashion product recognition using
-PyTorch Lightning, and FashionMNIST. We optimize the neural network architecture. As it is too time
-consuming to use the whole FashionMNIST dataset, we here use a small subset of it.
-
-You can run this example as follows, pruning can be turned on and off with the `--pruning`
-argument.
-    $ python pytorch_lightning_simple.py [--pruning]
-
-"""
 import argparse
 import os
 from typing import List
@@ -29,92 +17,47 @@ from torch.utils.data import random_split
 from torchvision import datasets
 from torchvision import transforms
 
+from torchvision.models import (efficientnet_b0, EfficientNet_B0_Weights,
+                                efficientnet_b1, EfficientNet_B1_Weights, 
+                                efficientnet_b2, EfficientNet_B2_Weights, 
+                                efficientnet_b3, EfficientNet_B3_Weights, 
+                                efficientnet_b4, EfficientNet_B4_Weights, 
+                                efficientnet_v2_m, EfficientNet_V2_M_Weights, 
+                                efficientnet_v2_s, EfficientNet_V2_S_Weights)
+
+
+# src: https://github.com/optuna/optuna-examples/blob/main/pytorch/pytorch_lightning_ddp.py
+# src: https://github.com/optuna/optuna-examples/blob/main/pytorch/pytorch_lightning_simple.py
+
+
+"""
+You can run this example as follows, pruning can be turned on and off with the `--pruning`
+argument.
+    $ python pytorch_lightning_simple.py [--pruning]
+"""
+
+
+def objective(trial: optuna.trial.Trial) -> float:
+    num_units = trial.suggest_int("NUM_UNITS", 16, 32)
+    dropout_rate = trial.suggest_float("DROPOUT_RATE", 0.1, 0.2)
+    optimizer = trial.suggest_categorical("OPTIMIZER", ["sgd", "adam"])
+
+    accuracy = train_test_model(num_units, dropout_rate, optimizer)  # type: ignore
+    return accuracy
+
+
+tensorboard_callback = TensorBoardCallback("logs/", metric_name="accuracy")
+
+study = optuna.create_study(direction="maximize")
+study.optimize(objective, n_trials=10, timeout=600, callbacks=[tensorboard_callback])
+
+
+
+
 
 if version.parse(pl.__version__) < version.parse("1.6.0"):
     raise RuntimeError("PyTorch Lightning>=1.6.0 is required for this example.")
 
-PERCENT_VALID_EXAMPLES = 0.1
-BATCHSIZE = 128
-CLASSES = 10
-EPOCHS = 10
-DIR = os.getcwd()
-
-
-class Net(nn.Module):
-    def __init__(self, dropout: float, output_dims: List[int]) -> None:
-        super().__init__()
-        layers: List[nn.Module] = []
-
-        input_dim: int = 28 * 28
-        for output_dim in output_dims:
-            layers.append(nn.Linear(input_dim, output_dim))
-            layers.append(nn.ReLU())
-            layers.append(nn.Dropout(dropout))
-            input_dim = output_dim
-
-        layers.append(nn.Linear(input_dim, CLASSES))
-
-        self.layers = nn.Sequential(*layers)
-
-    def forward(self, data: torch.Tensor) -> torch.Tensor:
-        logits = self.layers(data)
-        return F.log_softmax(logits, dim=1)
-
-
-class LightningNet(pl.LightningModule):
-    def __init__(self, dropout: float, output_dims: List[int]) -> None:
-        super().__init__()
-        self.model = Net(dropout, output_dims)
-
-    def forward(self, data: torch.Tensor) -> torch.Tensor:
-        return self.model(data.view(-1, 28 * 28))
-
-    def training_step(self, batch: List[torch.Tensor], batch_idx: int) -> torch.Tensor:
-        data, target = batch
-        output = self(data)
-        return F.nll_loss(output, target)
-
-    def validation_step(self, batch: List[torch.Tensor], batch_idx: int) -> None:
-        data, target = batch
-        output = self(data)
-        pred = output.argmax(dim=1, keepdim=True)
-        accuracy = pred.eq(target.view_as(pred)).float().mean()
-        self.log("val_acc", accuracy)
-        self.log("hp_metric", accuracy, on_step=False, on_epoch=True)
-
-    def configure_optimizers(self) -> optim.Optimizer:
-        return optim.Adam(self.model.parameters())
-
-
-class FashionMNISTDataModule(pl.LightningDataModule):
-    def __init__(self, data_dir: str, batch_size: int):
-        super().__init__()
-        self.data_dir = data_dir
-        self.batch_size = batch_size
-
-    def setup(self, stage: Optional[str] = None) -> None:
-        self.mnist_test = datasets.FashionMNIST(
-            self.data_dir, train=False, download=True, transform=transforms.ToTensor()
-        )
-        mnist_full = datasets.FashionMNIST(
-            self.data_dir, train=True, download=True, transform=transforms.ToTensor()
-        )
-        self.mnist_train, self.mnist_val = random_split(mnist_full, [55000, 5000])
-
-    def train_dataloader(self) -> DataLoader:
-        return DataLoader(
-            self.mnist_train, batch_size=self.batch_size, shuffle=True, pin_memory=True
-        )
-
-    def val_dataloader(self) -> DataLoader:
-        return DataLoader(
-            self.mnist_val, batch_size=self.batch_size, shuffle=False, pin_memory=True
-        )
-
-    def test_dataloader(self) -> DataLoader:
-        return DataLoader(
-            self.mnist_test, batch_size=self.batch_size, shuffle=False, pin_memory=True
-        )
 
 
 def objective(trial: optuna.trial.Trial) -> float:
@@ -171,127 +114,12 @@ if __name__ == "__main__":
     for key, value in trial.params.items():
         print("    {}: {}".format(key, value))
 
+def objective(trial: optuna.trial.Trial) -> float:
 
 
-# src: https://github.com/optuna/optuna-examples/blob/main/pytorch/pytorch_lightning_ddp.py
-
-"""
-Optuna example that optimizes multi-layer perceptrons using PyTorch Lightning's
-distributed data-parallel training.
-
-In this example, we optimize the validation accuracy of fashion product recognition using
-PyTorch Lightning, and FashionMNIST. We optimize the neural network architecture. As it is too time
-consuming to use the whole FashionMNIST dataset, we here use a small subset of it.
-
-You can run this example as follows, pruning can be turned on and off with the `--pruning`
-argument.
-    $ python pytorch/pytorch_lightning_ddp.py [--pruning]
-
-"""
-import argparse
-import os
-from typing import List
-from typing import Optional
-
-import lightning.pytorch as pl
-import optuna
-from optuna.integration import PyTorchLightningPruningCallback
-import torch
-from torch import nn
-from torch import optim
-import torch.nn.functional as F
-from torch.utils.data import DataLoader
-from torch.utils.data import random_split
-from torchvision import datasets
-from torchvision import transforms
-
-
-PERCENT_VALID_EXAMPLES = 0.1
-BATCHSIZE = 128
-CLASSES = 10
-EPOCHS = 10
-DIR = os.getcwd()
-
-
-class Net(nn.Module):
-    def __init__(self, dropout: float, output_dims: List[int]):
-        super().__init__()
-        layers: List[nn.Module] = []
-
-        input_dim: int = 28 * 28
-        for output_dim in output_dims:
-            layers.append(nn.Linear(input_dim, output_dim))
-            layers.append(nn.ReLU())
-            layers.append(nn.Dropout(dropout))
-            input_dim = output_dim
-
-        layers.append(nn.Linear(input_dim, CLASSES))
-
-        self.layers: nn.Module = nn.Sequential(*layers)
-
-    def forward(self, data: torch.Tensor) -> torch.Tensor:
-        logits = self.layers(data)
-        return F.log_softmax(logits, dim=1)
-
-
-class LightningNet(pl.LightningModule):
-    def __init__(self, dropout: float, output_dims: List[int]):
-        super().__init__()
-        self.model = Net(dropout, output_dims)
-
-    def forward(self, data: torch.Tensor) -> torch.Tensor:
-        return self.model(data.view(-1, 28 * 28))
-
-    def training_step(self, batch, batch_idx: int) -> torch.Tensor:
-        data, target = batch
-        output = self(data)
-        return F.nll_loss(output, target)
-
-    def validation_step(self, batch, batch_idx: int) -> None:
-        data, target = batch
-        output = self(data)
-        pred = output.argmax(dim=1, keepdim=True)
-        accuracy = pred.eq(target.view_as(pred)).float().mean()
-        self.log("val_acc", accuracy, sync_dist=True)
-        self.log("hp_metric", accuracy, on_step=False, on_epoch=True, sync_dist=True)
-
-    def configure_optimizers(self) -> optim.Optimizer:
-        return optim.Adam(self.model.parameters())
-
-
-class FashionMNISTDataModule(pl.LightningDataModule):
-    def __init__(self, data_dir: str, batch_size: int):
-        super().__init__()
-        self.data_dir = data_dir
-        self.batch_size = batch_size
-
-    def setup(self, stage: Optional[str] = None) -> None:
-        self.mnist_test = datasets.FashionMNIST(
-            self.data_dir, train=False, download=True, transform=transforms.ToTensor()
-        )
-        mnist_full = datasets.FashionMNIST(
-            self.data_dir, train=True, download=True, transform=transforms.ToTensor()
-        )
-        self.mnist_train, self.mnist_val = random_split(mnist_full, [55000, 5000])
-
-    def train_dataloader(self) -> DataLoader:
-        return DataLoader(
-            self.mnist_train, batch_size=self.batch_size, shuffle=True, pin_memory=True
-        )
-
-    def val_dataloader(self) -> DataLoader:
-        return DataLoader(
-            self.mnist_val, batch_size=self.batch_size, shuffle=False, pin_memory=True
-        )
-
-    def test_dataloader(self) -> DataLoader:
-        return DataLoader(
-            self.mnist_test, batch_size=self.batch_size, shuffle=False, pin_memory=True
-        )
 
 
 def objective(trial: optuna.trial.Trial) -> float:
-    # We optimize the number of layers, hidden units in each layer and dropouts.
     n_layers = trial.suggest_int("n_layers", 1, 3)
     dropout = trial.suggest_float("dropout", 0.2, 0.5)
     output_dims = [
