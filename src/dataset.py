@@ -39,9 +39,8 @@ class ImageDataset(Dataset):
         sparse_label_tensor = torch.tensor(sparse_label)
 
         cat_label = F.one_hot(sparse_label_tensor, num_classes=NUM_CLASSES)
-        return torch.from_numpy(img.transpose((2, 0, 1))), cat_label
-
-
+        return img, cat_label
+        # return torch.from_numpy(img.transpose((2, 0, 1))), cat_label
 
 
 class DataModule(pl.LightningDataModule):
