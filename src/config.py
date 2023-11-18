@@ -31,7 +31,8 @@ CROP_SIZE = {
 # Dataset
 ROOT_DIR = os.getcwd()
 # ROOT_DIR = os.path.abspath('..')
-DATA_DIR = "../data/raw/"
+# DATA_DIR = "../data/raw/"
+DATA_DIR = "D:/Projects/Skin Disease Detection/Dataset/LatestDataset"
 NUM_WORKERS = 4
 
 # Compute related

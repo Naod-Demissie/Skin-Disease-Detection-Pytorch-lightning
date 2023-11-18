@@ -1,22 +1,14 @@
 
 import argparse
-import os
-from typing import List
-from typing import Optional
+from typing import List, Optional
 
-import lightning.pytorch as pl
 import optuna
 from optuna.integration import PyTorchLightningPruningCallback
-from packaging import version
-import torch
-from torch import nn
-from torch import optim
-import torch.nn.functional as F
-from torch.utils.data import DataLoader
-from torch.utils.data import random_split
-from torchvision import datasets
-from torchvision import transforms
 
+import lightning.pytorch as pl
+
+import torch
+import torch.nn.functional as F
 from torchvision.models import (efficientnet_b0, EfficientNet_B0_Weights,
                                 efficientnet_b1, EfficientNet_B1_Weights, 
                                 efficientnet_b2, EfficientNet_B2_Weights, 
@@ -24,6 +16,9 @@ from torchvision.models import (efficientnet_b0, EfficientNet_B0_Weights,
                                 efficientnet_b4, EfficientNet_B4_Weights, 
                                 efficientnet_v2_m, EfficientNet_V2_M_Weights, 
                                 efficientnet_v2_s, EfficientNet_V2_S_Weights)
+from .model import LightningNetwork
+from .dataset import DataModule
+from .config import *
 
 
 # src: https://github.com/optuna/optuna-examples/blob/main/pytorch/pytorch_lightning_ddp.py
@@ -36,59 +31,63 @@ argument.
     $ python pytorch_lightning_simple.py [--pruning]
 """
 
+base_model_dict = {
+    'efficientnet_b0': efficientnet_b0(weights=EfficientNet_B0_Weights.DEFAULT), 
+    'efficientnet_b1': efficientnet_b1(weights=EfficientNet_B1_Weights.DEFAULT), 
+    'efficientnet_b2': efficientnet_b2(weights=EfficientNet_B2_Weights.DEFAULT), 
+    'efficientnet_b3': efficientnet_b3(weights=EfficientNet_B3_Weights.DEFAULT), 
+    'efficientnet_b4': efficientnet_b4(weights=EfficientNet_B4_Weights.DEFAULT), 
+    'efficientnet_v2_s': efficientnet_v2_s(weights=EfficientNet_V2_M_Weights.DEFAULT), 
+    'efficientnet_v2_m': efficientnet_v2_m(weights=EfficientNet_V2_S_Weights.DEFAULT), 
+}
 
-def objective(trial: optuna.trial.Trial) -> float:
-    num_units = trial.suggest_int("NUM_UNITS", 16, 32)
-    dropout_rate = trial.suggest_float("DROPOUT_RATE", 0.1, 0.2)
-    optimizer = trial.suggest_categorical("OPTIMIZER", ["sgd", "adam"])
-
-    accuracy = train_test_model(num_units, dropout_rate, optimizer)  # type: ignore
-    return accuracy
-
-
-tensorboard_callback = TensorBoardCallback("logs/", metric_name="accuracy")
-
-study = optuna.create_study(direction="maximize")
-study.optimize(objective, n_trials=10, timeout=600, callbacks=[tensorboard_callback])
-
-
-
-
-
-if version.parse(pl.__version__) < version.parse("1.6.0"):
-    raise RuntimeError("PyTorch Lightning>=1.6.0 is required for this example.")
+#TODO: output_dim list
 
 
 
 def objective(trial: optuna.trial.Trial) -> float:
-    # We optimize the number of layers, hidden units in each layer and dropouts.
-    n_layers = trial.suggest_int("n_layers", 1, 3)
-    dropout = trial.suggest_float("dropout", 0.2, 0.5)
-    output_dims = [
-        trial.suggest_int("n_units_l{}".format(i), 4, 128, log=True) for i in range(n_layers)
-    ]
+    # output_dims = [
+    #     trial.suggest_int("n_units_l{}".format(i), 4, 128, log=True) for i in range(n_layers)
+    # ]
 
-    model = LightningNet(dropout, output_dims)
-    datamodule = FashionMNISTDataModule(data_dir=DIR, batch_size=BATCHSIZE)
+    dropout = trial.suggest_float('dropout', 0.1, 0.5, step=0.1)
+    output_dims = trial.suggest_categorical('output_dim', output_dims)
+    # lr=trial.suggest_float('lr', 1e-5, 1e-1, log=True
+    base_model_name = trial.suggest_categorical('base_model_name', list(base_model_dict.keys()))
+    base_model = base_model_dict[base_model_name]
+
+    model = LightningNetwork(
+        base_model=base_model, dropout=dropout, output_dims=output_dims
+    )
+    datamodule = DataModule(model_name=base_model_name)
 
     trainer = pl.Trainer(
         logger=True,
         limit_val_batches=PERCENT_VALID_EXAMPLES,
         enable_checkpointing=False,
-        max_epochs=EPOCHS,
-        accelerator="auto",
-        devices=1,
-        callbacks=[PyTorchLightningPruningCallback(trial, monitor="val_acc")],
+        max_epochs=NUM_EPOCHS,
+        accelerator="auto" if torch.cuda.is_available() else "cpu",
+        #TODO: check what the no implies
+        devices=1, #2
+        callbacks=[
+            PyTorchLightningPruningCallback(trial, monitor="val_acc")
+        ],
+        strategy="ddp_spawn",
     )
-    hyperparameters = dict(n_layers=n_layers, dropout=dropout, output_dims=output_dims)
+    
+    hyperparameters = dict(base_model_name=base_model_name, dropout=dropout, output_dims=output_dims)
     trainer.logger.log_hyperparams(hyperparameters)
     trainer.fit(model, datamodule=datamodule)
 
+    # callback.check_pruned()
+    # validation_accuracy
     return trainer.callback_metrics["val_acc"].item()
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="PyTorch Lightning example.")
+    parser = argparse.ArgumentParser(
+        description="PyTorch Lightning example."
+    )
     parser.add_argument(
         "--pruning",
         "-p",
@@ -99,90 +98,27 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     pruner = optuna.pruners.MedianPruner() if args.pruning else optuna.pruners.NopPruner()
+    tensorboard_callback = TensorBoardCallback("logs/", metric_name="accuracy")
 
-    study = optuna.create_study(direction="maximize", pruner=pruner)
-    study.optimize(objective, n_trials=100, timeout=600)
-
-    print("Number of finished trials: {}".format(len(study.trials)))
-
-    print("Best trial:")
-    trial = study.best_trial
-
-    print("  Value: {}".format(trial.value))
-
-    print("  Params: ")
-    for key, value in trial.params.items():
-        print("    {}: {}".format(key, value))
-
-def objective(trial: optuna.trial.Trial) -> float:
-
-
-
-
-def objective(trial: optuna.trial.Trial) -> float:
-    n_layers = trial.suggest_int("n_layers", 1, 3)
-    dropout = trial.suggest_float("dropout", 0.2, 0.5)
-    output_dims = [
-        trial.suggest_int("n_units_l{}".format(i), 4, 128, log=True) for i in range(n_layers)
-    ]
-
-    model = LightningNet(dropout, output_dims)
-    datamodule = FashionMNISTDataModule(data_dir=DIR, batch_size=BATCHSIZE)
-    callback = PyTorchLightningPruningCallback(trial, monitor="val_acc")
-
-    trainer = pl.Trainer(
-        logger=True,
-        limit_val_batches=PERCENT_VALID_EXAMPLES,
-        enable_checkpointing=False,
-        max_epochs=EPOCHS,
-        accelerator="auto" if torch.cuda.is_available() else "cpu",
-        devices=2,
-        callbacks=[callback],
-        strategy="ddp_spawn",
-    )
-    hyperparameters = dict(n_layers=n_layers, dropout=dropout, output_dims=output_dims)
-    trainer.logger.log_hyperparams(hyperparameters)
-    trainer.fit(model, datamodule=datamodule)
-
-    callback.check_pruned()
-
-    return trainer.callback_metrics["val_acc"].item()
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="PyTorch Lightning distributed data-parallel training example."
-    )
-    parser.add_argument(
-        "--pruning",
-        "-p",
-        action="store_true",
-        help="Activate the pruning feature. `MedianPruner` stops unpromising "
-        "trials at the early stages of training.",
-    )
-    args = parser.parse_args()
-
-    pruner: optuna.pruners.BasePruner = (
-        optuna.pruners.MedianPruner() if args.pruning else optuna.pruners.NopPruner()
-    )
-
-    storage = "sqlite:///example.db"
     study = optuna.create_study(
+        #TODO: change the study name
         study_name="pl_ddp",
-        storage=storage,
+        storage="sqlite:///example.db",
         direction="maximize",
         pruner=pruner,
         load_if_exists=True,
     )
-    study.optimize(objective, n_trials=100, timeout=600)
 
-    print("Number of finished trials: {}".format(len(study.trials)))
+    study.optimize(objective, n_trials=100, timeout=600, callbacks=[tensorboard_callback])
 
+    print(f"Number of finished trials: {len(study.trials)}")
     print("Best trial:")
     trial = study.best_trial
 
-    print("  Value: {}".format(trial.value))
-
+    print(f"  Value: {trial.value}")
     print("  Params: ")
     for key, value in trial.params.items():
-        print("    {}: {}".format(key, value))
+        print(f"    {key}: {value}")
+
+# if version.parse(pl.__version__) < version.parse("1.6.0"):
+#     raise RuntimeError("PyTorch Lightning>=1.6.0 is required for this example.")

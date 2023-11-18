@@ -36,14 +36,16 @@ class ImageDataset(Dataset):
             img = self.transform(img)
 
         sparse_label = int(self.df.loc[idx, 'sparse_label'])
-        cat_label = F.one_hot(sparse_label, num_classes=NUM_CLASSES)
-        return torch.from_numpy(img.transpose((2, 0, 1))), torch.tensor(cat_label)
+        sparse_label_tensor = torch.tensor(sparse_label)
+
+        cat_label = F.one_hot(sparse_label_tensor, num_classes=NUM_CLASSES)
+        return torch.from_numpy(img.transpose((2, 0, 1))), cat_label
 
 
 
 
-class MnistDataModule(pl.LightningDataModule):
-    def __init__(self, model_name: str, batch_size: int, num_workers: int) -> None:
+class DataModule(pl.LightningDataModule):
+    def __init__(self, model_name: str) -> None:
         super().__init__()
         self.resize_size = RESIZE_SIZE[model_name][:-1]
         self.crop_size = CROP_SIZE[model_name][:-1]
@@ -90,7 +92,7 @@ class MnistDataModule(pl.LightningDataModule):
             )
         )
         self.val_ds = ImageDataset(
-            df=train_df, 
+            df=val_df, 
             input_shape=self.resize_size, 
             transform=transforms.Compose(
                 [
@@ -104,7 +106,7 @@ class MnistDataModule(pl.LightningDataModule):
         )
 
         self.test_ds = ImageDataset(
-            df=train_df, 
+            df=test_df, 
             input_shape=self.resize_size, 
             transform=transforms.Compose(
                 [

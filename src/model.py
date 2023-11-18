@@ -5,8 +5,6 @@ import torch.nn.functional as F
 from torch import nn, optim
 import pytorch_lightning as pl
 import torchmetrics
-import torchvision
-
 
 from .config import *
 
@@ -41,10 +39,11 @@ class Network(nn.Module):
 class LightningNetwork(pl.LightningModule):
     # def __init__(self, input_size, learning_rate, num_classes)
     def __init__(self, 
+                 base_model,
                  dropout: float, 
                  output_dims: List[int]) -> None:
         super().__init__()
-        self.model = Network(dropout=dropout, output_dims=output_dims)
+        self.model = Network(base_model=base_model, dropout=dropout, output_dims=output_dims)
 
         self.loss_fn = nn.CrossEntropyLoss()
         self.accuracy = torchmetrics.Accuracy(task="multiclass", num_classes=NUM_CLASSES)
