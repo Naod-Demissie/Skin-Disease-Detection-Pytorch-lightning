@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from typing import List
+from typing import List, Optional
 import torch.nn.functional as F
 from torch import nn, optim
 import pytorch_lightning as pl
@@ -8,8 +8,9 @@ import torchmetrics
 
 from .config import *
 
+
 class Network(nn.Module):
-    def __init__(self, base_model, dropout: float, output_dims: List[int]):
+    def __init__(self, base_model, dropout: float, output_dims: List[int]) -> None:
         super().__init__()
 
         self.base_model = base_model
@@ -22,18 +23,12 @@ class Network(nn.Module):
             layers.append(nn.Dropout(dropout))
             input_dim = output_dim
         layers.append(nn.Linear(input_dim, NUM_CLASSES))
-        # layers.append(nn.Softmax())
+        layers.append(nn.Softmax())
 
         self.base_model.classifier = nn.Sequential(*layers)
     
-    # def forward(self, x):
-    #     return self.base_model(x)
-
-    def forward(self, x):
-        logits = self.base_model(x)
-        return F.log_softmax(logits, dim=1)
-
-# Network(base_model=efficientnet_b4(pretrained=False), dropout=0.3, output_dims=[128, 64, 32])
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.base_model(x)
 
 
 class LightningNetwork(pl.LightningModule):
@@ -53,7 +48,6 @@ class LightningNetwork(pl.LightningModule):
         self.auc = torchmetrics.AUROC(task="multiclass", num_classes=NUM_CLASSES)
 
     def forward(self, data: torch.Tensor) -> torch.Tensor:
-        # return self.model(data.view(-1,))
         return self.model(data)
 
     def _common_step(self, batch: List[torch.Tensor], batch_idx: int) -> List[torch.Tensor]:
@@ -80,17 +74,6 @@ class LightningNetwork(pl.LightningModule):
         return {"loss": loss, "output": output, "target": target}
 
     #TODO: check the return value of this method
-    # def validation_step(self, batch: List[torch.Tensor], batch_idx: int) -> torch.Tensor:
-    #     loss, output, target = self._common_step(batch, batch_idx)
-    #     self.log("val_loss", loss)
-    #     return loss
-    #     #======
-    #     pred = output.argmax(dim=1, keepdim=True)
-    #     accuracy = pred.eq(target.view_as(pred)).float().mean()
-    #     self.log("val_acc", accuracy, sync_dist=True)
-    #     self.log("hp_metric", accuracy, on_step=False, on_epoch=True, sync_dist=True)
-
-
     def validation_step(self, batch: List[torch.Tensor], batch_idx: int) -> torch.Tensor:
         loss, output, target = self._common_step(batch, batch_idx)
         self.log_dict(

@@ -14,10 +14,9 @@ from .config import (NUM_CLASSES, DATA_DIR, RESIZE_SIZE,
                      CROP_SIZE, BATCH_SIZE, NUM_WORKERS)
 
 class ImageDataset(Dataset):
-    def __init__(self, df, input_shape, transform=None):
+    def __init__(self, df, transform=None):
         self.df = df
         self.transform = transform
-        self.input_shape = input_shape
 
     def __len__(self):
         return len(self.df)
@@ -27,10 +26,7 @@ class ImageDataset(Dataset):
         img = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
         xmin, ymin, xmax, ymax = self.df.loc[idx, ['xmin', 'ymin', 'xmax', 'ymax']].values
         xmin, ymin, xmax, ymax = int(xmin), int(ymin), int(xmax), int(ymax)
-
         img = img[ymin:ymax, xmin:xmax]
-        img = cv2.resize(img, self.input_shape[:-1], interpolation=cv2.INTER_LINEAR)
-        # TODO: you may not need to resize the image. Do that in the data transform
 
         if self.transform:
             img = self.transform(img)
@@ -40,7 +36,6 @@ class ImageDataset(Dataset):
 
         cat_label = F.one_hot(sparse_label_tensor, num_classes=NUM_CLASSES)
         return img, cat_label
-        # return torch.from_numpy(img.transpose((2, 0, 1))), cat_label
 
 
 class DataModule(pl.LightningDataModule):
@@ -50,6 +45,7 @@ class DataModule(pl.LightningDataModule):
         self.crop_size = CROP_SIZE[model_name][:-1]
         self.batch_size = BATCH_SIZE
         self.num_workers = NUM_WORKERS
+        self.setup()
 
 
     def prepare_data(self) -> None:
@@ -60,7 +56,7 @@ class DataModule(pl.LightningDataModule):
         self.df['sparse_label'] = self.df['label_name'].map({'atopic': 0, 'papular': 1,'scabies': 2})
 
     def setup(self, stage: Optional[str] = None) -> None:
-
+        self.prepare_data()
         gs = GroupShuffleSplit(n_splits=2, train_size=.85, random_state=42)
 
         train_val_idx, test_idx = next(gs.split(self.df,groups=self.df.patient_id))
@@ -77,11 +73,10 @@ class DataModule(pl.LightningDataModule):
 
         self.train_ds = ImageDataset(
             df=train_df, 
-            input_shape=self.resize_size, 
             transform=transforms.Compose(
                 [
                     transforms.ToPILImage(),
-                    # transforms.Resize(self.resize_size),
+                    transforms.Resize(self.resize_size),
                     transforms.CenterCrop(self.crop_size),
                     transforms.RandomHorizontalFlip(),
                     transforms.RandomVerticalFlip(),
@@ -92,11 +87,10 @@ class DataModule(pl.LightningDataModule):
         )
         self.val_ds = ImageDataset(
             df=val_df, 
-            input_shape=self.resize_size, 
             transform=transforms.Compose(
                 [
                     transforms.ToPILImage(),
-                    # transforms.Resize(self.resize_size),
+                    transforms.Resize(self.resize_size),
                     transforms.CenterCrop(self.crop_size),
                     transforms.ToTensor(),
                     transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
@@ -106,11 +100,10 @@ class DataModule(pl.LightningDataModule):
 
         self.test_ds = ImageDataset(
             df=test_df, 
-            input_shape=self.resize_size, 
             transform=transforms.Compose(
                 [
                     transforms.ToPILImage(),
-                    # transforms.Resize(self.resize_size),
+                    transforms.Resize(self.resize_size),
                     transforms.CenterCrop(self.crop_size),
                     transforms.ToTensor(),
                     transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
