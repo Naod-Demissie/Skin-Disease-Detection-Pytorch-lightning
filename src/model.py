@@ -23,7 +23,7 @@ class Network(nn.Module):
             layers.append(nn.Dropout(dropout))
             input_dim = output_dim
         layers.append(nn.Linear(input_dim, NUM_CLASSES))
-        layers.append(nn.Softmax())
+        layers.append(nn.Softmax(dim=1))
 
         self.base_model.classifier = nn.Sequential(*layers)
     
@@ -32,15 +32,18 @@ class Network(nn.Module):
 
 
 class LightningNetwork(pl.LightningModule):
-    # def __init__(self, input_size, learning_rate, num_classes)
     def __init__(self, 
                  base_model,
                  dropout: float, 
-                 output_dims: List[int]) -> None:
+                 output_dims: List[int],
+                 learning_rate: float) -> None:
+    
         super().__init__()
         self.model = Network(base_model=base_model, dropout=dropout, output_dims=output_dims)
-
+        self.learning_rate = learning_rate
         self.loss_fn = nn.CrossEntropyLoss()
+        self.validation_step_outputs: List = []
+
         self.accuracy = torchmetrics.Accuracy(task="multiclass", num_classes=NUM_CLASSES)
         self.recall = torchmetrics.Recall(task="multiclass", num_classes=NUM_CLASSES)
         self.precision = torchmetrics.Precision(task="multiclass", num_classes=NUM_CLASSES)
@@ -52,59 +55,58 @@ class LightningNetwork(pl.LightningModule):
 
     def _common_step(self, batch: List[torch.Tensor], batch_idx: int) -> List[torch.Tensor]:
         feature, target = batch
-
-        # TODO: check which one works
         output = self.forward(feature)
-        # output = self(feature)
-
         loss = self.loss_fn(output, target)
         return loss, output, target
 
-    def training_step(self, batch: List[torch.Tensor], batch_idx: int) -> None:
+    def training_step(self, batch: List[torch.Tensor], batch_idx: int) -> dict:
         loss, output, target = self._common_step(batch, batch_idx)
         self.log_dict(
             {
-                "train_loss": loss,
+                "loss": loss,
             },
             on_step=False,
             on_epoch=True,
             prog_bar=True,
         )
-
         return {"loss": loss, "output": output, "target": target}
 
-    #TODO: check the return value of this method
-    def validation_step(self, batch: List[torch.Tensor], batch_idx: int) -> torch.Tensor:
+    def validation_step(self, batch: List[torch.Tensor], batch_idx: int) -> dict:
         loss, output, target = self._common_step(batch, batch_idx)
+        self.validation_step_outputs.append(
+            {
+                "loss": loss, 
+                "output": output, 
+                "target": target
+            }   
+        )
+
         self.log_dict(
             {
-                "val_loss": loss,
+                "loss": loss,
             },
             on_step=False,
             on_epoch=True,
             prog_bar=True,
         )
-
         return {"loss": loss, "output": output, "target": target}
 
     
-    #TODO: check the return value of this method
     def test_step(self, batch: List[torch.Tensor], batch_idx: int) -> torch.Tensor:
         loss, output, target = self._common_step(batch, batch_idx)
         self.log("test_loss", loss)
         return loss
 
-    #TODO: check the return value of this method
     def predict_step(self, batch: List[torch.Tensor], batch_idx: int) -> torch.Tensor:
         feature, _ = batch
         feature = feature.reshape(feature.size(0), -1)
-        scores = self.forward(feature)
+        output = self.forward(feature)
         # TODO: check if categorical or sparse labels are needed
-        preds = torch.argmax(scores, dim=1)
+        preds = torch.argmax(output, dim=1)
         return preds
     
-    #TODO: type annotation
-    def training_epoch_end(self, outputs) -> None:
+    # def on_train_epoch_end(self, outputs: torch.Tensor) -> None:
+    def on_train_epoch_end(self, outputs: List[dict]) -> None:
         outputs = torch.cat([x["output"] for x in outputs])
         targets = torch.cat([x["target"] for x in outputs])
         self.log_dict(
@@ -120,12 +122,32 @@ class LightningNetwork(pl.LightningModule):
             prog_bar=True,
         )
 
-    #TODO: type annotation
-    def validation_epoch_end(self, outputs) -> None:
-        outputs = torch.cat([x["output"] for x in outputs])
-        targets = torch.cat([x["target"] for x in outputs])
+    # def on_validation_epoch_end(self, outputs: List[dict]) -> None:
+    # # def on_validation_epoch_end(self, outputs: torch.Tensor) -> None:
+    #     outputs = torch.cat([x["output"] for x in outputs])
+    #     targets = torch.cat([x["target"] for x in outputs])
+    #     self.log_dict(
+    #         {
+    #             "val_acc": self.accuracy(outputs, targets),
+    #             "val_f1": self.f1_score(outputs, targets),
+    #             "val_recall": self.recall(outputs, targets),
+    #             "val_precision": self.precision(outputs, targets),
+    #             "val_auc": self.auc(outputs, targets),
+    #         },
+    #         on_step=False,
+    #         on_epoch=True,
+    #         prog_bar=True,
+    #     )
+
+    def on_validation_epoch_end(self) -> None:
+    # def on_validation_epoch_end(self, outputs: torch.Tensor) -> None:
+        outputs = torch.stack([x['output'] for x in self.validation_step_outputs])
+        targets = torch.stack([x['target'] for x in self.validation_step_outputs])
+        losses = torch.stack([x['loss'] for x in self.validation_step_outputs])
+
         self.log_dict(
             {
+                "val_loss": losses.mean(),
                 "val_acc": self.accuracy(outputs, targets),
                 "val_f1": self.f1_score(outputs, targets),
                 "val_recall": self.recall(outputs, targets),
@@ -136,7 +158,6 @@ class LightningNetwork(pl.LightningModule):
             on_epoch=True,
             prog_bar=True,
         )
-
+    
     def configure_optimizers(self) -> optim.Optimizer:
-        return optim.Adam(self.parameters(), lr=LEARNING_RATE)
-        # return optim.Adam(self.parameters(), lr=self.lr)
+        return optim.Adam(self.parameters(), lr=self.learning_rate)

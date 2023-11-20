@@ -3,23 +3,27 @@ import pytorch_lightning as pl
 from model import NN
 from dataset import MnistDataModule
 import config
-from callbacks import MyPrintingCallback, EarlyStopping
+#TODO: import EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.profilers import PyTorchProfiler
 
 torch.set_float32_matmul_precision("medium") # to make lightning happy
 
 if __name__ == "__main__":
-    logger = TensorBoardLogger("tb_logs", name="mnist_model_v1")
+    logger = TensorBoardLogger(
+        save_dir="../logs/tb_logs", 
+        name="trail_v1"
+    )
     profiler = PyTorchProfiler(
-        on_trace_ready=torch.profiler.tensorboard_trace_handler("tb_logs/profiler0"),
+        on_trace_ready=torch.profiler.tensorboard_trace_handler("../logs/tb_logs/profiler0"),
         schedule=torch.profiler.schedule(skip_first=10, wait=1, warmup=1, active=20),
     )
-    model = NN(
-        input_size=config.INPUT_SIZE,
-        learning_rate=config.LEARNING_RATE,
-        num_classes=config.NUM_CLASSES,
-    )
+    base_model_name = 'efficientnet_b0'
+    model = LightningNetwork(
+            base_model=base_model_dict[base_model_name] ,
+            dropout=0.2, 
+            output_dims=[128, 64]
+)
     dm = MnistDataModule(
         data_dir=config.DATA_DIR,
         batch_size=config.BATCH_SIZE,
@@ -33,8 +37,79 @@ if __name__ == "__main__":
         min_epochs=1,
         max_epochs=config.NUM_EPOCHS,
         precision=config.PRECISION,
-        callbacks=[MyPrintingCallback(), EarlyStopping(monitor="val_loss")],
+        # callbacks=[EarlyStopping(monitor="val_loss")],
     )
     trainer.fit(model, dm)
     trainer.validate(model, dm)
     trainer.test(model, dm)
+
+
+    
+if __name__ == "__main__":
+    logger = TensorBoardLogger("tb_logs", name="mnist_model_v1")
+    profiler = PyTorchProfiler(
+        on_trace_ready=torch.profiler.tensorboard_trace_handler("tb_logs/profiler0"),
+        schedule=torch.profiler.schedule(skip_first=10, wait=1, warmup=1, active=20),
+    )
+    base_model_name = 'efficientnet_b0'
+    model = LightningNetwork(
+            base_model=base_model_dict[base_model_name] ,
+            dropout=0.2, 
+            output_dims=[128, 64]
+)
+    dm = MnistDataModule(
+        data_dir=config.DATA_DIR,
+        batch_size=config.BATCH_SIZE,
+        num_workers=config.NUM_WORKERS,
+    )
+    trainer = pl.Trainer(
+        profiler=profiler,
+        logger=logger,
+        accelerator=config.ACCELERATOR,
+        devices=config.DEVICES,
+        min_epochs=1,
+        max_epochs=config.NUM_EPOCHS,
+        precision=config.PRECISION,
+        # callbacks=[EarlyStopping(monitor="val_loss")],
+    )
+    trainer.fit(model, dm)
+    trainer.validate(model, dm)
+    trainer.test(model, dm)
+
+
+
+import argparse
+import os
+import sys
+import pandas as pd
+
+import pytorch_lightning as pl
+import torch
+import torch.nn.functional as F
+
+from pytorch_lightning.loggers import TensorBoardLogger
+from pytorch_lightning.profilers import PyTorchProfiler
+
+from .config import *
+from .dataset import DataModule
+from .model import LightningNetwork
+
+
+if __name__ == "__main__":
+    logger = TensorBoardLogger(
+        save_dir="../logs/tb_logs", 
+        name="trail_v1"
+    )
+    profiler = PyTorchProfiler(
+        on_trace_ready=torch.profiler.tensorboard_trace_handler("../logs/tb_logs/profiler0"),
+        schedule=torch.profiler.schedule(skip_first=10, wait=1, warmup=1, active=20),
+    )
+
+    base_model_name = 'efficientnet_b0'
+    model = LightningNetwork(
+            base_model=get_base_model(base_model_name),
+            dropout=0.2, 
+            output_dims=[128, 64],
+            learning_rate=LEARNING_RATE
+    )
+    data_module = DataModule(model_name=base_model_name)

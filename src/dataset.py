@@ -33,8 +33,8 @@ class ImageDataset(Dataset):
 
         sparse_label = int(self.df.loc[idx, 'sparse_label'])
         sparse_label_tensor = torch.tensor(sparse_label)
-
-        cat_label = F.one_hot(sparse_label_tensor, num_classes=NUM_CLASSES)
+        cat_label = F.one_hot(sparse_label_tensor, num_classes=NUM_CLASSES).float()
+        
         return img, cat_label
 
 
@@ -45,7 +45,6 @@ class DataModule(pl.LightningDataModule):
         self.crop_size = CROP_SIZE[model_name][:-1]
         self.batch_size = BATCH_SIZE
         self.num_workers = NUM_WORKERS
-        self.setup()
 
 
     def prepare_data(self) -> None:
@@ -56,7 +55,6 @@ class DataModule(pl.LightningDataModule):
         self.df['sparse_label'] = self.df['label_name'].map({'atopic': 0, 'papular': 1,'scabies': 2})
 
     def setup(self, stage: Optional[str] = None) -> None:
-        self.prepare_data()
         gs = GroupShuffleSplit(n_splits=2, train_size=.85, random_state=42)
 
         train_val_idx, test_idx = next(gs.split(self.df,groups=self.df.patient_id))
@@ -117,6 +115,7 @@ class DataModule(pl.LightningDataModule):
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             shuffle=True,
+            persistent_workers=True,
             pin_memory=True
         )
 
@@ -126,6 +125,7 @@ class DataModule(pl.LightningDataModule):
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             shuffle=False,
+            persistent_workers=True,
             pin_memory=True
         )
 
@@ -135,6 +135,17 @@ class DataModule(pl.LightningDataModule):
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             shuffle=False,
+            persistent_workers=True,
             pin_memory=True
         )   
     
+    def predict_dataloader(self) -> DataLoader:
+        return DataLoader(
+            self.test_ds,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=False,
+            persistent_workers=True,
+            pin_memory=True
+        )   
+  

@@ -5,17 +5,11 @@ from typing import List, Optional
 import optuna
 from optuna.integration import PyTorchLightningPruningCallback
 
-import lightning.pytorch as pl
+import pytorch_lightning as pl
 
 import torch
 import torch.nn.functional as F
-from torchvision.models import (efficientnet_b0, EfficientNet_B0_Weights,
-                                efficientnet_b1, EfficientNet_B1_Weights, 
-                                efficientnet_b2, EfficientNet_B2_Weights, 
-                                efficientnet_b3, EfficientNet_B3_Weights, 
-                                efficientnet_b4, EfficientNet_B4_Weights, 
-                                efficientnet_v2_m, EfficientNet_V2_M_Weights, 
-                                efficientnet_v2_s, EfficientNet_V2_S_Weights)
+
 from .model import LightningNetwork
 from .dataset import DataModule
 from .config import *
@@ -31,19 +25,12 @@ argument.
     $ python pytorch_lightning_simple.py [--pruning]
 """
 
-base_model_dict = {
-    'efficientnet_b0': efficientnet_b0(weights=EfficientNet_B0_Weights.DEFAULT), 
-    'efficientnet_b1': efficientnet_b1(weights=EfficientNet_B1_Weights.DEFAULT), 
-    'efficientnet_b2': efficientnet_b2(weights=EfficientNet_B2_Weights.DEFAULT), 
-    'efficientnet_b3': efficientnet_b3(weights=EfficientNet_B3_Weights.DEFAULT), 
-    'efficientnet_b4': efficientnet_b4(weights=EfficientNet_B4_Weights.DEFAULT), 
-    'efficientnet_v2_s': efficientnet_v2_s(weights=EfficientNet_V2_M_Weights.DEFAULT), 
-    'efficientnet_v2_m': efficientnet_v2_m(weights=EfficientNet_V2_S_Weights.DEFAULT), 
-}
+base_model_names = [
+    'efficientnet_b0', 'efficientnet_b1', 'efficientnet_b2', 'efficientnet_b3', 
+    'efficientnet_b4', 'efficientnet_v2_s', 'efficientnet_v2_m'
+]
 
 #TODO: output_dim list
-
-
 
 def objective(trial: optuna.trial.Trial) -> float:
     # output_dims = [
@@ -53,8 +40,8 @@ def objective(trial: optuna.trial.Trial) -> float:
     dropout = trial.suggest_float('dropout', 0.1, 0.5, step=0.1)
     output_dims = trial.suggest_categorical('output_dim', output_dims)
     # lr=trial.suggest_float('lr', 1e-5, 1e-1, log=True
-    base_model_name = trial.suggest_categorical('base_model_name', list(base_model_dict.keys()))
-    base_model = base_model_dict[base_model_name]
+    base_model_name = trial.suggest_categorical('base_model_name', base_model_names)
+    base_model = get_base_model(base_model_name)
 
     model = LightningNetwork(
         base_model=base_model, dropout=dropout, output_dims=output_dims
