@@ -11,7 +11,8 @@ from torchvision.models import (efficientnet_b0, EfficientNet_B0_Weights,
 # Hyperparameters
 NUM_CLASSES = 3
 LEARNING_RATE = 0.001
-BATCH_SIZE = 32
+BATCH_SIZE = 5
+# BATCH_SIZE = 32
 NUM_EPOCHS = 3
 
 # Paths
@@ -19,7 +20,7 @@ NUM_EPOCHS = 3
 # DATA_DIR = "../data/raw/"
 ROOT_DIR = os.getcwd()
 DATA_DIR = 'D:/Projects/Skin Disease Detection/Dataset/LatestDataset'
-
+TB_LOG_DIR = '../logs/tensorboard/'
 
 # Compute related
 NUM_WORKERS = 4

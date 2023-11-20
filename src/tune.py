@@ -1,4 +1,5 @@
-
+import os
+import sys
 import argparse
 from typing import List, Optional
 
@@ -10,9 +11,10 @@ import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
 
-from .model import LightningNetwork
-from .dataset import DataModule
-from .config import *
+sys.path.append('..')
+from src.model import LightningNetwork
+from src.dataset import DataModule
+from src.config import *
 
 
 # src: https://github.com/optuna/optuna-examples/blob/main/pytorch/pytorch_lightning_ddp.py

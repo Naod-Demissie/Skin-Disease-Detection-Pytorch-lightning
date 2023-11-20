@@ -1,3 +1,5 @@
+import os
+import sys
 import cv2
 import pandas as pd
 from typing import Optional
@@ -10,6 +12,7 @@ from torch.utils.data import Dataset, DataLoader
 
 import pytorch_lightning as pl
 
+sys.path.append('..')
 from .config import (NUM_CLASSES, DATA_DIR, RESIZE_SIZE, 
                      CROP_SIZE, BATCH_SIZE, NUM_WORKERS)
 
@@ -32,8 +35,8 @@ class ImageDataset(Dataset):
             img = self.transform(img)
 
         sparse_label = int(self.df.loc[idx, 'sparse_label'])
-        sparse_label_tensor = torch.tensor(sparse_label)
-        cat_label = F.one_hot(sparse_label_tensor, num_classes=NUM_CLASSES).float()
+        sparse_label = torch.tensor(sparse_label)
+        cat_label = F.one_hot(sparse_label, num_classes=NUM_CLASSES).float()
         
         return img, cat_label
 
