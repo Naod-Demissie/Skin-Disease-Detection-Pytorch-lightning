@@ -18,8 +18,10 @@ from src.config import *
 
 
 base_model_names = [
-    'efficientnet_b0', 'efficientnet_b1', 'efficientnet_b2', 'efficientnet_b3', 
-    'efficientnet_b4', 'efficientnet_v2_s', 'efficientnet_v2_m'
+    'efficientnet_b0', 'efficientnet_b1',
+    'efficientnet_b2', 'efficientnet_b3', 
+    'efficientnet_b4', 'efficientnet_v2_s', 
+    'efficientnet_v2_m'
 ]
 
 output_dims = [
