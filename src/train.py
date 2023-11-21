@@ -27,6 +27,7 @@ if __name__ == '__main__':
     # parser.add_argument(
     #     '--output_dims', 
     #     type=list,
+    #     nargs='+',
     #     help='A list containing the number of neuron in each layer',
     # )
     # parser.add_argument(
@@ -93,12 +94,16 @@ if __name__ == '__main__':
     data_module = DataModule(model_name=base_model_name)
 
     trainer = pl.Trainer(
-        # accelerator=ACCELERATOR,
-        # devices=DEVICES,
+        logger=True,
         max_epochs=NUM_EPOCHS,
-        # precision=PRECISION,
+        precision=PRECISION,
+        # max_steps=5,
         fast_dev_run=True
         # callbacks=[EarlyStopping(monitor="val_loss")],
     )
     trainer.fit(model, data_module)
-    
+
+
+
+
+# python train.py --base_model_name efficientnet_b0 --dropout 0.5 --output_dims 128 64 32 --lr 0.001 --trail_name experiment1 --task train

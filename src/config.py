@@ -11,9 +11,8 @@ from torchvision.models import (efficientnet_b0, EfficientNet_B0_Weights,
 # Hyperparameters
 NUM_CLASSES = 3
 LEARNING_RATE = 0.001
-BATCH_SIZE = 5
-# BATCH_SIZE = 32
-NUM_EPOCHS = 3
+BATCH_SIZE = 32
+NUM_EPOCHS = 50
 
 # Paths
 # ROOT_DIR = os.path.abspath('..')

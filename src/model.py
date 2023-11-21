@@ -50,7 +50,7 @@ class LightningNetwork(pl.LightningModule):
         self.recall = torchmetrics.Recall(task="multiclass", num_classes=NUM_CLASSES)
         self.precision = torchmetrics.Precision(task="multiclass", num_classes=NUM_CLASSES)
         self.f1_score = torchmetrics.F1Score(task="multiclass", num_classes=NUM_CLASSES)
-        self.auc = torchmetrics.AUROC(task="multiclass", num_classes=NUM_CLASSES)
+        self.auroc = torchmetrics.AUROC(task="multiclass", num_classes=NUM_CLASSES)
 
     def forward(self, data: torch.Tensor) -> torch.Tensor:
         return self.model(data)
@@ -67,12 +67,12 @@ class LightningNetwork(pl.LightningModule):
         target_ = torch.argmax(target, dim=-1)
         self.log_dict(
             {
-                "train_loss": loss,
-                "train_acc": self.accuracy(output_, target_),
-                "train_f1_score": self.f1_score(output_, target_),
-                "train_recall": self.recall(output_, target_),
-                "train_precision": self.precision(output_, target_),
-                "train_auc": self.auc(output, target_),
+                "loss": loss,
+                "acc": self.accuracy(output_, target_),
+                "f1_score": self.f1_score(output_, target_),
+                "recall": self.recall(output_, target_),
+                "precision": self.precision(output_, target_),
+                "auroc": self.auroc(output, target_),
             },
             on_step=True,
             on_epoch=True,
@@ -91,7 +91,7 @@ class LightningNetwork(pl.LightningModule):
                 "val_f1_score": self.f1_score(output_, target_),
                 "val_recall": self.recall(output_, target_),
                 "val_precision": self.precision(output_, target_),
-                "val_auc": self.auc(output, target_),
+                "val_auroc": self.auroc(output, target_),
             },
             on_step=True,
             on_epoch=True,
@@ -111,7 +111,7 @@ class LightningNetwork(pl.LightningModule):
                 "test_f1_score": self.f1_score(output_, target_),
                 "test_recall": self.recall(output_, target_),
                 "test_precision": self.precision(output_, target_),
-                "test_auc": self.auc(output, target_),
+                "test_auroc": self.auroc(output, target_),
             },
             on_step=True,
             on_epoch=True,

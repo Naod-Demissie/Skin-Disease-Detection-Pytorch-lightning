@@ -17,21 +17,14 @@ from src.dataset import DataModule
 from src.config import *
 
 
-# src: https://github.com/optuna/optuna-examples/blob/main/pytorch/pytorch_lightning_ddp.py
-# src: https://github.com/optuna/optuna-examples/blob/main/pytorch/pytorch_lightning_simple.py
-
-
-"""
-You can run this example as follows, pruning can be turned on and off with the `--pruning`
-argument.
-    $ python pytorch_lightning_simple.py [--pruning]
-"""
-
 base_model_names = [
     'efficientnet_b0', 'efficientnet_b1', 'efficientnet_b2', 'efficientnet_b3', 
     'efficientnet_b4', 'efficientnet_v2_s', 'efficientnet_v2_m'
 ]
 
+output_dims = [
+    [128, 64], [512, 256], [256, 128], [64, 32]
+]
 #TODO: output_dim list
 
 def objective(trial: optuna.trial.Trial) -> float:
@@ -41,12 +34,15 @@ def objective(trial: optuna.trial.Trial) -> float:
 
     dropout = trial.suggest_float('dropout', 0.1, 0.5, step=0.1)
     output_dims = trial.suggest_categorical('output_dim', output_dims)
-    # lr=trial.suggest_float('lr', 1e-5, 1e-1, log=True
+    lr=trial.suggest_float('lr', 1e-5, 1e-1, log=True)
     base_model_name = trial.suggest_categorical('base_model_name', base_model_names)
     base_model = get_base_model(base_model_name)
 
     model = LightningNetwork(
-        base_model=base_model, dropout=dropout, output_dims=output_dims
+        base_model=base_model, 
+        dropout=dropout, 
+        output_dims=output_dims, 
+        learning_rate=lr
     )
     datamodule = DataModule(model_name=base_model_name)
 
@@ -55,16 +51,16 @@ def objective(trial: optuna.trial.Trial) -> float:
         limit_val_batches=PERCENT_VALID_EXAMPLES,
         enable_checkpointing=False,
         max_epochs=NUM_EPOCHS,
-        accelerator="auto" if torch.cuda.is_available() else "cpu",
+        # accelerator="auto" if torch.cuda.is_available() else "cpu",
         #TODO: check what the no implies
-        devices=1, #2
-        callbacks=[
-            PyTorchLightningPruningCallback(trial, monitor="val_acc")
-        ],
+        # devices=1, #2
+        # callbacks=[
+        #     PyTorchLightningPruningCallback(trial, monitor="val_acc")
+        # ],
         strategy="ddp_spawn",
     )
     
-    hyperparameters = dict(base_model_name=base_model_name, dropout=dropout, output_dims=output_dims)
+    hyperparameters = dict(base_model_name=base_model_name, dropout=dropout, output_dims=output_dims, lr=lr)
     trainer.logger.log_hyperparams(hyperparameters)
     trainer.fit(model, datamodule=datamodule)
 

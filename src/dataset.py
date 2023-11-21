@@ -13,8 +13,8 @@ from torch.utils.data import Dataset, DataLoader
 import pytorch_lightning as pl
 
 sys.path.append('..')
-from .config import (NUM_CLASSES, DATA_DIR, RESIZE_SIZE, 
-                     CROP_SIZE, BATCH_SIZE, NUM_WORKERS)
+from src.config import (NUM_CLASSES, DATA_DIR, RESIZE_SIZE, 
+                        CROP_SIZE, BATCH_SIZE, NUM_WORKERS)
 
 class ImageDataset(Dataset):
     def __init__(self, df, transform=None):
