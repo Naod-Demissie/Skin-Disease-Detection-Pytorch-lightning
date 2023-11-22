@@ -1,14 +1,13 @@
 import os
 import sys
 import argparse
-from typing import List, Optional
+from typing import List
 
 import optuna
 from optuna.integration import PyTorchLightningPruningCallback
 
 import pytorch_lightning as pl
 
-import torch
 import torch.nn.functional as F
 
 sys.path.append('..')

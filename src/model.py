@@ -46,11 +46,11 @@ class LightningNetwork(pl.LightningModule):
         self.learning_rate = learning_rate
         self.loss_fn = nn.CrossEntropyLoss()
 
-        self.accuracy = torchmetrics.Accuracy(task="multiclass", num_classes=NUM_CLASSES)
-        self.recall = torchmetrics.Recall(task="multiclass", num_classes=NUM_CLASSES)
-        self.precision = torchmetrics.Precision(task="multiclass", num_classes=NUM_CLASSES)
-        self.f1_score = torchmetrics.F1Score(task="multiclass", num_classes=NUM_CLASSES)
-        self.auroc = torchmetrics.AUROC(task="multiclass", num_classes=NUM_CLASSES)
+        self.accuracy = torchmetrics.Accuracy(task="multiclass", average='macro', num_classes=NUM_CLASSES)
+        self.recall = torchmetrics.Recall(task="multiclass", average='macro', num_classes=NUM_CLASSES)
+        self.precision = torchmetrics.Precision(task="multiclass", average='macro', num_classes=NUM_CLASSES)
+        self.f1_score = torchmetrics.F1Score(task="multiclass", average='macro', num_classes=NUM_CLASSES)
+        self.auroc = torchmetrics.AUROC(task="multiclass", average='macro', num_classes=NUM_CLASSES)
 
     def forward(self, data: torch.Tensor) -> torch.Tensor:
         return self.model(data)
